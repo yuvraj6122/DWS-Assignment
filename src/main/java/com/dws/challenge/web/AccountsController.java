@@ -14,7 +14,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import javax.validation.Valid;
+import javax.validation.constraints.NotNull;
 import java.math.BigDecimal;
+import java.util.Objects;
 
 
 @RestController
@@ -32,14 +34,27 @@ public class AccountsController {
   }
 
   @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
-  public ResponseEntity<Object> createAccount(@RequestBody @Valid Account account) {
+  public ResponseEntity<Object> createAccount(@RequestBody @Valid @NotNull Account account) {
     log.info("Creating account {}", account);
+    BigDecimal balance = account.getBalance();
+    String accountId = account.getAccountId();
 
-    try {
-    this.accountsService.createAccount(account);
-    } catch (DuplicateAccountIdException daie) {
-      return new ResponseEntity<>(daie.getMessage(), HttpStatus.BAD_REQUEST);
+    // Had to add these checks because @NotNull @Valid @Min were not working correctly, and assertions were failing in UTs
+    boolean isIdNull = Objects.isNull(accountId);
+    boolean isBalanceNull = Objects.isNull(balance);
+    boolean isIdEmpty = !isIdNull && accountId.isEmpty();
+    boolean isBalanceNegative = !isBalanceNull && balance.compareTo(BigDecimal.ZERO) < 0;
+
+    if (isIdNull || isBalanceNull || isIdEmpty || isBalanceNegative) {
+      return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
     }
+
+
+      try {
+        this.accountsService.createAccount(account);
+      } catch (DuplicateAccountIdException daie) {
+        return new ResponseEntity<>(daie.getMessage(), HttpStatus.BAD_REQUEST);
+      }
 
     return new ResponseEntity<>(HttpStatus.CREATED);
   }
